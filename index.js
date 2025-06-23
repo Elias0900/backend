@@ -66,15 +66,21 @@ app.post('/api/inscriptions', (req, res) => {
         return res.status(500).json({ message: 'Erreur lors de l’enregistrement en base.' })
       }
 
-     const mailUser = {
-       from: process.env.SMTP_USER,
-       to: email,
-       subject: 'Confirmation d’inscription',
-       text: `Bonjour ${firstName},\n\nMerci pour votre inscription !
-     Merci de prévoir de l'espèce pour payer l'inscription sur place.
+   const mailUser = {
+     from: process.env.SMTP_USER,
+     to: email,
+     subject: 'Confirmation d’inscription',
+     text: `Bonjour ${firstName},
 
-     À bientôt !`,
-     }
+   Merci pour votre inscription !
+
+   Merci de prévoir de l'espèce pour payer l'inscription sur place.
+
+   Ce message est envoyé automatiquement, merci de ne pas y répondre.
+
+   À bientôt !`
+   }
+
 
       const mailNotify = {
         from: process.env.SMTP_USER,
