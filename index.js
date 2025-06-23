@@ -5,6 +5,7 @@ const cors = require('cors')
 const bodyParser = require('body-parser')
 const nodemailer = require('nodemailer')
 const path = require('path')
+const ExcelJS = require('exceljs') // <-- ajouté
 
 const app = express()
 app.use(cors())
@@ -65,12 +66,15 @@ app.post('/api/inscriptions', (req, res) => {
         return res.status(500).json({ message: 'Erreur lors de l’enregistrement en base.' })
       }
 
-      const mailUser = {
-        from: process.env.SMTP_USER,
-        to: email,
-        subject: 'Confirmation d’inscription',
-        text: `Bonjour ${firstName},\n\nMerci pour votre inscription !\n\nÀ bientôt !`,
-      }
+     const mailUser = {
+       from: process.env.SMTP_USER,
+       to: email,
+       subject: 'Confirmation d’inscription',
+       text: `Bonjour ${firstName},\n\nMerci pour votre inscription !
+     Merci de prévoir de l'espèce pour payer l'inscription sur place.
+
+     À bientôt !`,
+     }
 
       const mailNotify = {
         from: process.env.SMTP_USER,
@@ -111,6 +115,82 @@ app.get('/api/export-db', (req, res) => {
       console.error('Erreur téléchargement DB :', err)
       res.status(500).send('Erreur serveur lors du téléchargement.')
     }
+  })
+})
+
+/** 🔐 Endpoint reset : drop + recreate la table */
+app.post('/api/reset-db', (req, res) => {
+  const auth = req.query.secret
+  if (auth !== process.env.EXPORT_SECRET) {
+    return res.status(403).send('Accès refusé.')
+  }
+
+  db.serialize(() => {
+    db.run(`DROP TABLE IF EXISTS inscriptions`, (err) => {
+      if (err) {
+        console.error('Erreur drop table:', err)
+        return res.status(500).json({ message: 'Erreur lors de la suppression de la table.' })
+      }
+      db.run(`
+        CREATE TABLE inscriptions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          first_name TEXT NOT NULL,
+          age INTEGER NOT NULL,
+          phone TEXT NOT NULL,
+          email TEXT NOT NULL
+        )
+      `, (err) => {
+        if (err) {
+          console.error('Erreur création table:', err)
+          return res.status(500).json({ message: 'Erreur lors de la création de la table.' })
+        }
+        res.json({ message: 'Base de données réinitialisée avec succès.' })
+      })
+    })
+  })
+})
+
+/** 🔐 Endpoint export Excel */
+app.get('/api/export-excel', (req, res) => {
+  const auth = req.query.secret
+  if (auth !== process.env.EXPORT_SECRET) {
+    return res.status(403).send('Accès refusé.')
+  }
+
+  const workbook = new ExcelJS.Workbook()
+  const worksheet = workbook.addWorksheet('Inscriptions')
+
+  worksheet.columns = [
+    { header: 'ID', key: 'id', width: 10 },
+    { header: 'Prénom', key: 'first_name', width: 30 },
+    { header: 'Âge', key: 'age', width: 10 },
+    { header: 'Téléphone', key: 'phone', width: 20 },
+    { header: 'Email', key: 'email', width: 30 },
+  ]
+
+  db.all('SELECT * FROM inscriptions', (err, rows) => {
+    if (err) {
+      console.error('Erreur lecture DB:', err)
+      return res.status(500).send('Erreur lecture base.')
+    }
+
+    rows.forEach(row => worksheet.addRow(row))
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="inscriptions.xlsx"'
+    )
+
+    workbook.xlsx.write(res).then(() => {
+      res.end()
+    }).catch(error => {
+      console.error('Erreur écriture Excel:', error)
+      res.status(500).send('Erreur lors de la génération du fichier Excel.')
+    })
   })
 })
 
