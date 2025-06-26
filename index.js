@@ -11,6 +11,16 @@ const app = express()
 app.use(cors())
 app.use(bodyParser.json())
 
+const allowedOrigins = [
+  'http://localhost:5173', // ou ton port de dev
+  'https://ton-frontend.vercel.app', // ou ton domaine
+]
+
+app.use(cors({
+  origin: allowedOrigins,
+}))
+
+
 // Connexion à la base SQLite
 const db = new sqlite3.Database('./inscriptions.db', (err) => {
   if (err) {
